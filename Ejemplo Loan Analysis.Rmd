@@ -1,0 +1,140 @@
+---
+title: "Ejemplo Loan Analysis"
+author: "Francisco Dávila Santoy"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+```{r data, include=FALSE}
+library(gmodels) 
+library(ggplot2) 
+library(tidyr) 
+library(dplyr) 
+library(pROC)
+library(knitr) 
+library(Sim.DiffProc)
+library(bazar)
+library(scatterplot3d)
+library(MASS)
+```
+
+## Análisis de la base de datos
+
+La base de datos `loan_data_ch1` posee infomación referente a pagos e impagos de créditos por parte de hombres y mujeres en una institución financiera. La base de datos se compone de 29,092 observaciones y 10 variables, siendo estas:
+
+1. `loan_status`: donde cero significa que no hay impago, y uno simboliza default. Es nuestra variable de interés. El default se considera cuando un deudor no puede pagar sus obligaciones a tiempo o deja de pagar los intereses del principal.
+2. `loan_amnt`: monto del crédito
+3. `int_rate`: tasa de interés
+4. `grade`: calificación del crédito de A (mejor) a D (peor)
+5. `emp_length`: duración del deudor en su empleo
+6. `home_ownership`: tipo de propiedad del deudor
+7. `annual_inc`: ingreso anual
+8. `age`: edad
+9. `sex`: género
+10. `region`: región
+
+```{r loan-data}
+loan_data_ch1 <- readRDS("~/Desktop/R:STATA/R/Admon. Riesgo Financiero/loan_data_ch1.rds")
+str(loan_data_ch1)
+```
+
+Son observaciones pasadas que nos permitirán entender la probabilidad de que un individuo caiga en impago con base en el valor de sus variables, lo cual facilita la construcción de modelos cuantitativos y realizar predicciones. 
+
+Para una mejor visaulización de los primeros 10 datos se usa el comando `head`:
+
+```{r head loan-data}
+head(loan_data_ch1, 10)
+```
+
+Ahora, usamos el comando `CrossTable` para analizar nuestra variable de interés (`loan_status`) con otra variable, en este caso `home_ownership`:
+
+```{r crosstable loan-data}
+CrossTable(loan_data_ch1$home_ownership)
+```
+Lo que nos dice la tabla es que, de los 29,092 deudores, el 41.3% tiene su casa hipotecada, 0.3% tiene otra forma de propiedad, 7.09% es propietaria de su casa, y 50.5% renta. Sin embargo, podemos añadir más variables a nuestro análisis, de manera que podamos visualizar el `loan_status` por tipo de `home_ownership`.
+
+```{r crosstable loan-data home_ownership}
+CrossTable(loan_data_ch1$home_ownership, loan_data_ch1$loan_status, prop.r=TRUE, prop.c=FALSE, prop.t=FALSE, prop.chisq=FALSE)
+```
+La tabla nos dice que 25,865 personas no cayeron en default, mientras que 3227 sí lo hicieron. De estas, 1,181 tenía su casa hipotecada, 17 tenía otra forma de propiedad, 252 era propietaria y 1777 rentaba. Con histograma, podemos ver la distribución de la tasa de interés y del ingreso.
+
+```{r histograma int_rate}
+
+ggplot(loan_data_ch1, aes(x = int_rate)) + 
+  geom_histogram(aes(y = ..density..), binwidth=0.5, color="white", 
+                 fill="black") + 
+  labs(y = "Density",
+       x = "Interest Rate", 
+       title = "Interest Rate Histogram", 
+       subtitle = NULL) + 
+  theme(legend.position = "bottom", legend.title = element_blank())
+```
+
+```{r histograma inc}
+ggplot(loan_data_ch1, aes(x = annual_inc)) + 
+  geom_histogram(aes(y = ..density..),color="white", fill="black") + 
+  labs(y = "Density",
+       x = "Annual Income", 
+       title = "Annual Income Histogram", 
+       subtitle = NULL) + 
+  theme(legend.position = "bottom", legend.title = element_blank())
+```
+
+Histograma de tasa de interés nos dice que la principal tasa de interés aplicada en los créditos es del 7.5%, mientras que el histograma del ingreso presenta una anomalía. Se tiene un alto valor en el ingreso ($6,000,000) y pareciera como si no hubieran observaciones. Por ello, graficamos valores del ingreso y de la tasa de interés:
+
+```{r ggplot income}
+ggplot(loan_data_ch1, aes(int_rate, annual_inc))+
+  geom_point() + 
+  labs(y="Annual Income", 
+       x= "Interest Rate", 
+       title="Annual income inspection", 
+       subtitle=NULL) + 
+  theme(legend.position = "bottom", legend.title=element_blank())
+```
+
+Esto nos dice que hay individuos con altos ingresos, por lo que es necesario explorar a profundidad la validez de los datos. 
+
+```{r high_income}
+high_income <- loan_data_ch1[(loan_data_ch1$annual_inc > 1000000),]
+high_income
+```
+
+Tenemos 9 individuos con ingresos superiores a $1,000,000. Se observa, asimismo, que un individuo tiene 144 años. Eliminamos estas observaciones de manera que no tengan efecto en nuestro análisis:
+
+```{r nohigh_income}
+high_income_index <- data.frame(value=as.integer(rownames(high_income)))
+loan_data_ch1 <- loan_data_ch1[-high_income_index$value,]
+ggplot(loan_data_ch1, aes(int_rate, annual_inc))+
+  geom_point()+
+  labs(y="Annual Income",
+       x="Interest Rate",
+       title="Annual Income Without Extreme Values",
+       subtitle = NULL)+
+  theme(legend.position = "bottom", legend.title=element_blank())
+```
+
+Ahora, tenemos 29.083 observaciones una vez que eliminamos a los 9 individuos.
+
+```{r histograma nohigh_income}
+ggplot(loan_data_ch1, aes(x=annual_inc))+
+  geom_histogram(aes(y=..density..), color="black", fill="black")+
+  labs(y="Density",
+       x="Annual Income",
+       title="Annual Income Histogram (Second Version)",
+       subtitle=NULL)+
+  theme(legend.position = "bottom", legend.title=element_blank())
+```
+
+## Modelos logísticos
+
+## Predicción y evaluación de modelo
+
+## Estrategia del banco
